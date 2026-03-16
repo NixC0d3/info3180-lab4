@@ -1,10 +1,11 @@
 import os
 from app import app, db, login_manager
-from flask import render_template, request, redirect, url_for, flash, session, abort
+from flask import render_template, request, redirect, url_for, flash, session, abort, send_from_directory
 from flask_login import login_user, logout_user, current_user, login_required
-from werkzeug.utils import secure_filename, check_password_hash
+from werkzeug.utils import secure_filename
+from werkzeug.security import check_password_hash
 from app.models import UserProfile
-from app.forms import LoginForm
+from app.forms import LoginForm, UploadForm
 
 
 ###
@@ -24,17 +25,22 @@ def about():
 
 
 @app.route('/upload', methods=['POST', 'GET'])
+@login_required
 def upload():
-    # Instantiate your form class
+    # Instantiate form class
+    form = UploadForm()
 
     # Validate file upload on submit
     if form.validate_on_submit():
-        # Get file data and save to your uploads folder
 
+        # Get file data and save to uploads folder
+        photo = form.photo.data
+        filename = secure_filename(photo.filename)
+        photo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         flash('File Saved', 'success')
-        return redirect(url_for('home')) # Update this to redirect the user to a route that displays all uploaded image files
+        return redirect(url_for('upload'))
 
-    return render_template('upload.html')
+    return render_template('upload.html', form=form)
 
 
 @app.route('/login', methods=['POST', 'GET'])
@@ -69,6 +75,27 @@ def login():
             flash("Invalid username or password", "danger")
 
     return render_template("login.html", form=form)
+
+def get_uploaded_images():
+    folder = os.path.join(os.getcwd(), app.config['UPLOAD_FOLDER'])
+    images = []
+
+    for file in os.listdir(folder):
+        if file != '.gitkeep':
+            images.append(file)
+
+    return images
+
+@app.route('/uploads/<filename>')
+def get_image(filename):
+    upload_folder = os.path.join(os.getcwd(), app.config['UPLOAD_FOLDER'])
+    return send_from_directory(upload_folder, filename)
+
+@app.route('/files')
+@login_required
+def files():
+    images = get_uploaded_images()
+    return render_template('files.html', images=images)
 
 # user_loader callback. This callback is used to reload the user object from
 # the user ID stored in the session
